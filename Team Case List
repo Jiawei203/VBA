@@ -1,0 +1,378 @@
+Sub Refresh()
+
+    Dim wsMaster As Worksheet
+    Dim wsMY As Worksheet
+    Dim wsStaff As Worksheet
+    Dim findRange As Range
+    Dim DateComm As Range
+    Dim DueDate As Range
+    Dim DateCompleted As Range
+    Dim pasteRow As Long
+    Dim defaultTypeCase As String
+    Dim defaultTypeCaseRow As Long
+    Dim YearDate As Date
+    Dim YearDateEnd As Date
+    Dim currentYear As Integer
+    Dim SDcells As Range
+    Dim RefreshSucc As Boolean
+
+    If IsEmpty(Range("B1").Value) Then
+        MsgBox "Please select a Term(MY/YE) at B1"
+        Exit Sub
+    End If
+    ActiveWorkbook.RefreshAll
+    RefreshSucc = False
+    currentYear = Year(Date)
+    YearDate = DateSerial(currentYear, 1, 1)
+    YearDateEnd = DateSerial(currentYear, 12, 31)
+
+    ' Set references to source and destination worksheets
+    Set wsMaster = ThisWorkbook.Sheets("Q_Master_Cases")
+    Set wsMY = ThisWorkbook.Sheets("Cases for Appraisal")
+    Set wsStaff = ThisWorkbook.Sheets("Q_Staff_List")
+
+    ' Define the range to search for name in the source worksheet
+    Set findRange = wsMaster.UsedRange
+
+    ' Find the cell containing "Supervising Director"
+    Set SDcells = findRange.Find(What:="Supervising Director", LookIn:=xlValues, LookAt:=xlWhole)
+
+    ' Find the cell containing "Date Commenced"
+    'Set DateComm = findRange.Find(What:="Date Commenced", LookIn:=xlValues, LookAt:=xlWhole)
+
+    ' Find the cell containing "Due Date"
+    'Set DueDate = findRange.Find(What:="Due Date", LookIn:=xlValues, LookAt:=xlWhole)
+
+    ' Find the cell containing "Date Completed"
+    Set DateCompleted = findRange.Find(What:="Date Completed", LookIn:=xlValues, LookAt:=xlWhole)
+
+    Dim targetRange As Range
+    Dim targetCells As Range
+
+    Set targetRange = wsMY.UsedRange
+    Set targetCells = targetRange.Find(What:="Case/Project ID", LookIn:=xlValues, LookAt:=xlWhole)
+
+    wsMY.Rows(targetCells.Row + 1 & ":" & wsMY.Rows.Count).Delete
+
+    defaultTypeCaseRow = DateCompleted.Row + 1
+    defaultTypeCase = wsMaster.Cells(defaultTypeCaseRow, 1).Value
+
+    pasteRow = targetCells.Row + 1
+
+    For i = defaultTypeCaseRow To wsMaster.Cells(wsMaster.Rows.Count, 1).End(xlUp).Row
+        If wsMaster.Cells(i, 5).Value >= YearDate Or wsMaster.Cells(i, 5).Value = "" Then
+            ' SD, Team Leader & Members
+            ' Find the cell containing "Supervising Director"
+            For Each cell In wsMaster.Cells(i, SDcells.Column)
+                supervisingDirector = Trim(cell.Value) ' Assumes Supervising Director is in column 12
+                teamLeader = Trim(cell.Offset(0, 1).Value) ' Assumes Team Leader is in column 13
+                teamMember = Trim(cell.Offset(0, 2).Value) ' Assumes Team Member is in column 14
+
+                ' Remove "soe\" and split multiple names if exist for Supervising Director
+                splitValues = Split(Replace(LCase(supervisingDirector), "soe\", ""), ";")
+
+                ' Concatenate names and NRICs for Supervising Director
+                Dim concatenatedNamesSD As String
+                Dim concatenatedNRICsSD As String
+                concatenatedNamesSD = ""
+                concatenatedNRICsSD = ""
+
+                ' Loop through each name for Supervising Director
+                For e = LBound(splitValues) To UBound(splitValues)
+                    If Not (Left(splitValues(e), 5) = "mccs\" Or Left(splitValues(e), 5) = "MCCS\") Then
+                        supervisingDirector = Trim(splitValues(e))
+
+                        ' Find the Supervising Director in Staff List
+                        For Each staffCell In wsStaff.Range(wsStaff.Cells(2, 9), wsStaff.Cells(wsStaff.Rows.Count, 9).End(xlUp))
+                            If Trim(staffCell.Value) = supervisingDirector Then
+                                foundStaff = True
+                                Exit For
+                            End If
+                        Next staffCell
+
+                        ' Append name and NRIC to concatenatedNames and concatenatedNRICs for Supervising Director
+                        If foundStaff Then
+                            If concatenatedNamesSD <> "" Then
+                                concatenatedNamesSD = concatenatedNamesSD & vbCrLf & Trim(wsStaff.Cells(staffCell.Row, 2).Value) ' Assuming the name is in column 2
+                                concatenatedNRICsSD = concatenatedNRICsSD & vbCrLf & Trim(wsStaff.Cells(staffCell.Row, 16).Value) ' Assuming the NRIC is in column 16
+                            Else
+                                concatenatedNamesSD = Trim(wsStaff.Cells(staffCell.Row, 2).Value) ' Assuming the name is in column 2
+                                concatenatedNRICsSD = Trim(wsStaff.Cells(staffCell.Row, 16).Value) ' Assuming the NRIC is in column 16
+                            End If
+                        End If
+
+                        ' Reset foundStaff flag for next iteration
+                        foundStaff = False
+                    End If
+                Next e
+
+                ' Remove "soe\" and split multiple names if exist for Team Leader
+                splitValuesTL = Split(Replace(LCase(teamLeader), "soe\", ""), ";")
+
+                ' Concatenate names and NRICs for Team Leader
+                Dim concatenatedNamesTL As String
+                Dim concatenatedNRICsTL As String
+                concatenatedNamesTL = ""
+                concatenatedNRICsTL = ""
+
+                ' Loop through each name for Team Leader and concatenate
+                For e = LBound(splitValuesTL) To UBound(splitValuesTL)
+                    If Not (Left(splitValuesTL(e), 5) = "mccs\" Or Left(splitValuesTL(e), 5) = "MCCS\") Then
+                        teamLeader = Trim(splitValuesTL(e))
+
+                        ' Find the Team Leader in Staff List
+                        For Each staffCell In wsStaff.Range(wsStaff.Cells(2, 9), wsStaff.Cells(wsStaff.Rows.Count, 9).End(xlUp))
+                            If Trim(staffCell.Value) = teamLeader Then
+                                foundStaff = True
+                                Exit For
+                            End If
+                        Next staffCell
+
+                        ' Append name and NRIC to concatenatedNames and concatenatedNRICs for Team Leader
+                        If foundStaff Then
+                            If concatenatedNamesTL <> "" Then
+                                concatenatedNamesTL = concatenatedNamesTL & vbCrLf & Trim(wsStaff.Cells(staffCell.Row, 2).Value) ' Assuming the name is in column 2
+                                concatenatedNRICsTL = concatenatedNRICsTL & vbCrLf & Trim(wsStaff.Cells(staffCell.Row, 16).Value) ' Assuming the NRIC is in column 16
+                            Else
+                                concatenatedNamesTL = Trim(wsStaff.Cells(staffCell.Row, 2).Value) ' Assuming the name is in column 2
+                                concatenatedNRICsTL = Trim(wsStaff.Cells(staffCell.Row, 16).Value) ' Assuming the NRIC is in column 16
+                            End If
+                        End If
+
+                        ' Reset foundStaff flag for next iteration
+                        foundStaff = False
+                    End If
+                Next e
+
+                ' Remove "soe\" and split multiple names if exist for Team Member
+                splitValuesTM = Split(Replace(LCase(teamMember), "soe\", ""), ";")
+
+                ' Append name and NRIC to concatenatedNames and concatenatedNRICs for Team Member
+                Dim concatenatedNamesTM As String
+                Dim concatenatedNRICsTM As String
+                concatenatedNamesTM = ""
+                concatenatedNRICsTM = ""
+
+                If teamMember = "" Then
+                    pasteColumnTM = 6 ' Column for Team Member
+                    pasteColumnTL = 8 ' Column for Team Leader
+                    pasteColumnSD = 10 ' Column for Supervising Director
+
+                    pasteColumnTM_NR = 5 ' Column for Team Member NRIC
+                    pasteColumnTL_NR = 7 ' Column for Team Leader NRIC
+                    pasteColumnSD_NR = 9 ' Column for Supervising Director NRIC
+
+                    Dim copyRange As Range
+                    Set copyRange = wsMaster.Cells(i, 2)
+
+                    ' Paste the values into respective columns
+                    wsMY.Cells(pasteRow, 1).Value = wsMaster.Cells(i, 4).Value & "_" & wsMY.Range("B1").Value & currentYear ' Copy column 4 from wsMaster to column 1 in wsMY
+                    copyRange.Value = Replace(wsMaster.Cells(i, 2).Value, "&#39;", "'")
+                    wsMY.Cells(pasteRow, 2).Value = wsMaster.Cells(i, 2).Value
+                    wsMY.Cells(pasteRow, 3).Value = wsMaster.Cells(i, 10).Value
+                    If (wsMaster.Cells(i, 5).Value) = "" Then
+                        wsMY.Cells(pasteRow, 4).Value = YearDateEnd
+                    Else
+                        wsMY.Cells(pasteRow, 4).Value = wsMaster.Cells(i, 5).Value
+                    End If
+
+
+
+                    wsMY.Cells(pasteRow, 19).Value = wsMaster.Cells(i, 10).Value
+                    wsMY.Cells(pasteRow, 20).Value = wsMaster.Cells(i, 11).Value
+                    wsMY.Cells(pasteRow, 21).Value = wsMaster.Cells(i, 5).Value
+                    wsMY.Cells(pasteRow, 22).Value = wsMaster.Cells(i, 8).Value
+                    wsMY.Cells(pasteRow, 23).Value = wsMaster.Cells(i, 15).Value
+                    wsMY.Cells(pasteRow, pasteColumnTM).Value = concatenatedNamesTM
+                    wsMY.Cells(pasteRow, pasteColumnTL).Value = concatenatedNamesTL
+                    wsMY.Cells(pasteRow, pasteColumnSD).Value = concatenatedNamesSD
+
+                    wsMY.Cells(pasteRow, pasteColumnTM_NR).Value = concatenatedNRICsTM
+                    wsMY.Cells(pasteRow, pasteColumnTL_NR).Value = concatenatedNRICsTL
+                    wsMY.Cells(pasteRow, pasteColumnSD_NR).Value = concatenatedNRICsSD
+
+                    ' Add borders to all cells in the current row
+                    wsMY.Range(wsMY.Cells(pasteRow, 1), wsMY.Cells(pasteRow, 23)).Borders.LineStyle = xlContinuous
+                    wsMY.Cells(pasteRow, 2).Interior.Color = RGB(252, 213, 180) ' Column 2 fill color
+                    wsMY.Cells(pasteRow, 3).Interior.Color = RGB(255, 255, 0) ' Column 3 fill color
+                    wsMY.Cells(pasteRow, 4).Interior.Color = RGB(191, 191, 191) ' Column 4 fill color
+
+                    ' Team Member, Team Leader and Supervising Director columns fill color
+                    If (concatenatedNamesTM) = "" Then
+                        wsMY.Cells(pasteRow, pasteColumnTM).Interior.Color = RGB(255, 0, 0) ' Team Member column fill color
+                    Else
+                        wsMY.Cells(pasteRow, pasteColumnTM).Interior.Color = RGB(255, 192, 0) ' Team Member column fill color
+                    End If
+
+                    If InStr(concatenatedNamesTL, vbCrLf) > 0 Then
+                        wsMY.Cells(pasteRow, pasteColumnTL).Interior.Color = RGB(255, 0, 0)
+                    ElseIf (concatenatedNamesTL) = "" Then
+                        wsMY.Cells(pasteRow, pasteColumnTL).Interior.Color = RGB(255, 0, 0)
+                    Else
+                        wsMY.Cells(pasteRow, pasteColumnTL).Interior.Color = RGB(255, 192, 0)
+                    End If
+
+                    If InStr(concatenatedNamesSD, vbCrLf) > 0 Then
+                        wsMY.Cells(pasteRow, pasteColumnSD).Interior.Color = RGB(255, 0, 0)
+                    ElseIf (concatenatedNamesSD) = "" Then
+                        wsMY.Cells(pasteRow, pasteColumnSD).Interior.Color = RGB(255, 0, 0)
+                    Else
+                        wsMY.Cells(pasteRow, pasteColumnSD).Interior.Color = RGB(255, 192, 0)
+                    End If
+
+                    ' Team Member, Team Leader and Supervising Director NRIC column fill color
+                    If InStr(concatenatedNRICsTM, vbCrLf) > 0 Then
+                        wsMY.Cells(pasteRow, pasteColumnTM_NR).Interior.Color = RGB(255, 0, 0)
+                    ElseIf (concatenatedNRICsTM) = "" Then
+                        wsMY.Cells(pasteRow, pasteColumnTM_NR).Interior.Color = RGB(255, 0, 0)
+                    End If
+
+                    If InStr(concatenatedNRICsTL, vbCrLf) > 0 Then
+                        wsMY.Cells(pasteRow, pasteColumnTL_NR).Interior.Color = RGB(255, 0, 0)
+                    ElseIf (concatenatedNRICsTL) = "" Then
+                        wsMY.Cells(pasteRow, pasteColumnTL_NR).Interior.Color = RGB(255, 0, 0)
+                    End If
+
+                    If InStr(concatenatedNRICsSD, vbCrLf) > 0 Then
+                        wsMY.Cells(pasteRow, pasteColumnSD_NR).Interior.Color = RGB(255, 0, 0)
+                    ElseIf (concatenatedNRICsSD) = "" Then
+                        wsMY.Cells(pasteRow, pasteColumnSD_NR).Interior.Color = RGB(255, 0, 0)
+                    End If
+
+                    ' Move to the next row for pasting
+                    pasteRow = pasteRow + 1
+
+                    ' Reset foundStaff flag for next iteration
+                    foundStaff = False
+                End If
+
+                ' Loop through each name for Team Member
+                For e = LBound(splitValuesTM) To UBound(splitValuesTM)
+                    If Not (Left(splitValuesTM(e), 5) = "mccs\" Or Left(splitValuesTM(e), 5) = "MCCS\") Then
+                        teamMember = Trim(splitValuesTM(e))
+
+                        If teamMember <> "" Then
+                            ' Find the Team Member in Staff List
+                            For Each staffCell In wsStaff.Range(wsStaff.Cells(2, 9), wsStaff.Cells(wsStaff.Rows.Count, 9).End(xlUp))
+                                If Trim(staffCell.Value) = teamMember Then
+                                    foundStaff = True
+                                    Exit For
+                                End If
+                            Next staffCell
+
+                            ' Append name and NRIC to concatenatedNames and concatenatedNRICs for Team Member
+                            concatenatedNamesTM = ""
+                            concatenatedNRICsTM = ""
+
+                            If foundStaff Then
+                                If concatenatedNamesTM <> "" Then
+                                    concatenatedNamesTM = concatenatedNamesTM & vbCrLf & Trim(wsStaff.Cells(staffCell.Row, 2).Value) ' Assuming the name is in column 2
+                                    concatenatedNRICsTM = concatenatedNRICsTM & vbCrLf & Trim(wsStaff.Cells(staffCell.Row, 16).Value) ' Assuming the NRIC is in column 16
+                                Else
+                                    concatenatedNamesTM = Trim(wsStaff.Cells(staffCell.Row, 2).Value) ' Assuming the name is in column 2
+                                    concatenatedNRICsTM = Trim(wsStaff.Cells(staffCell.Row, 16).Value) ' Assuming the NRIC is in column 16
+                                End If
+                            End If
+
+                            pasteColumnTM = 6 ' Column for Team Member
+                            pasteColumnTL = 8 ' Column for Team Leader
+                            pasteColumnSD = 10 ' Column for Supervising Director
+
+                            pasteColumnTM_NR = 5 ' Column for Team Member NRIC
+                            pasteColumnTL_NR = 7 ' Column for Team Leader NRIC
+                            pasteColumnSD_NR = 9 ' Column for Supervising Director NRIC
+
+                            Set copyRange = wsMaster.Cells(i, 2)
+
+                            ' Paste the values into respective columns
+                            wsMY.Cells(pasteRow, 1).Value = wsMaster.Cells(i, 4).Value & "_" & wsMY.Range("B1").Value & currentYear ' Copy column 4 from wsMaster to column 1 in wsMY
+                            copyRange.Value = Replace(wsMaster.Cells(i, 2).Value, "&#39;", "'")
+                            wsMY.Cells(pasteRow, 2).Value = wsMaster.Cells(i, 2).Value
+                            wsMY.Cells(pasteRow, 3).Value = wsMaster.Cells(i, 10).Value
+                            If (wsMaster.Cells(i, 5).Value) = "" Then
+                                wsMY.Cells(pasteRow, 4).Value = YearDateEnd
+                            Else
+                                wsMY.Cells(pasteRow, 4).Value = wsMaster.Cells(i, 5).Value
+                            End If
+
+                            wsMY.Cells(pasteRow, 19).Value = wsMaster.Cells(i, 10).Value
+                            wsMY.Cells(pasteRow, 20).Value = wsMaster.Cells(i, 11).Value
+                            wsMY.Cells(pasteRow, 21).Value = wsMaster.Cells(i, 5).Value
+                            wsMY.Cells(pasteRow, 22).Value = wsMaster.Cells(i, 8).Value
+                            wsMY.Cells(pasteRow, 23).Value = wsMaster.Cells(i, 15).Value
+                            wsMY.Cells(pasteRow, pasteColumnTM).Value = concatenatedNamesTM
+                            wsMY.Cells(pasteRow, pasteColumnTL).Value = concatenatedNamesTL
+                            wsMY.Cells(pasteRow, pasteColumnSD).Value = concatenatedNamesSD
+
+                            wsMY.Cells(pasteRow, pasteColumnTM_NR).Value = concatenatedNRICsTM
+                            wsMY.Cells(pasteRow, pasteColumnTL_NR).Value = concatenatedNRICsTL
+                            wsMY.Cells(pasteRow, pasteColumnSD_NR).Value = concatenatedNRICsSD
+
+                            ' Add borders to all cells in the current row
+                            wsMY.Range(wsMY.Cells(pasteRow, 1), wsMY.Cells(pasteRow, 23)).Borders.LineStyle = xlContinuous
+                            ' Change the fill color of specific columns
+                            wsMY.Cells(pasteRow, 2).Interior.Color = RGB(252, 213, 180) ' Column 2 fill color
+                            wsMY.Cells(pasteRow, 3).Interior.Color = RGB(255, 255, 0) ' Column 3 fill color
+                            wsMY.Cells(pasteRow, 4).Interior.Color = RGB(191, 191, 191) ' Column 4 fill color
+
+                            ' Team Member, Team Leader and Supervising Director columns fill color
+                            If (concatenatedNamesTM) = "" Then
+                                wsMY.Cells(pasteRow, pasteColumnTM).Interior.Color = RGB(255, 0, 0) ' Team Member column fill color
+                            Else
+                                wsMY.Cells(pasteRow, pasteColumnTM).Interior.Color = RGB(255, 192, 0) ' Team Member column fill color
+                            End If
+
+                            If InStr(concatenatedNamesTL, vbCrLf) > 0 Then
+                                wsMY.Cells(pasteRow, pasteColumnTL).Interior.Color = RGB(255, 0, 0)
+                            ElseIf (concatenatedNamesTL) = "" Then
+                                wsMY.Cells(pasteRow, pasteColumnTL).Interior.Color = RGB(255, 0, 0)
+                            Else
+                                wsMY.Cells(pasteRow, pasteColumnTL).Interior.Color = RGB(255, 192, 0)
+                            End If
+
+                            If InStr(concatenatedNamesSD, vbCrLf) > 0 Then
+                                wsMY.Cells(pasteRow, pasteColumnSD).Interior.Color = RGB(255, 0, 0)
+                            ElseIf (concatenatedNamesSD) = "" Then
+                                wsMY.Cells(pasteRow, pasteColumnSD).Interior.Color = RGB(255, 0, 0)
+                            Else
+                                wsMY.Cells(pasteRow, pasteColumnSD).Interior.Color = RGB(255, 192, 0)
+                            End If
+
+                            ' Team Member, Team Leader and Supervising Director NRIC column fill color
+                            If InStr(concatenatedNRICsTM, vbCrLf) > 0 Then
+                                wsMY.Cells(pasteRow, pasteColumnTM_NR).Interior.Color = RGB(255, 0, 0)
+                            ElseIf (concatenatedNRICsTM) = "" Then
+                                wsMY.Cells(pasteRow, pasteColumnTM_NR).Interior.Color = RGB(255, 0, 0)
+                            End If
+
+                            If InStr(concatenatedNRICsTL, vbCrLf) > 0 Then
+                                wsMY.Cells(pasteRow, pasteColumnTL_NR).Interior.Color = RGB(255, 0, 0)
+                            ElseIf (concatenatedNRICsTL) = "" Then
+                                wsMY.Cells(pasteRow, pasteColumnTL_NR).Interior.Color = RGB(255, 0, 0)
+                            End If
+
+                            If InStr(concatenatedNRICsSD, vbCrLf) > 0 Then
+                                wsMY.Cells(pasteRow, pasteColumnSD_NR).Interior.Color = RGB(255, 0, 0)
+                            ElseIf (concatenatedNRICsSD) = "" Then
+                                wsMY.Cells(pasteRow, pasteColumnSD_NR).Interior.Color = RGB(255, 0, 0)
+                            End If
+
+                            ' Move to the next row for pasting
+                            pasteRow = pasteRow + 1
+
+                            ' Reset foundStaff flag for next iteration
+                            foundStaff = False
+
+
+                        End If
+                    End If
+                Next e
+            Next cell
+        End If
+        RefreshSucc = True
+    Next i
+
+    If RefreshSucc Then
+        MsgBox "Completed Extraction From iShare+"
+    End If
+End Sub
